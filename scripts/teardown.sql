@@ -6,13 +6,13 @@ Last Updated: 2/12/2026
 -----------------------------------------------------------------------------*/
 
 
-USE ROLE ACCOUNTADMIN;
+-- USE ROLE ACCOUNTADMIN;
 
-DROP DATABASE DEMO_DB;
-DROP WAREHOUSE DEMO_WH;
-DROP ROLE DEMO_ROLE;
+-- DROP DATABASE DEMO_DB;
+-- DROP WAREHOUSE DEMO_WH;
+-- DROP ROLE DEMO_ROLE;
 
--- Drop the weather share
-DROP DATABASE FROSTBYTE_WEATHERSOURCE;
+-- -- Drop the weather share
+-- DROP DATABASE FROSTBYTE_WEATHERSOURCE;
 
 -- Remove the "dev" branch in your repo
