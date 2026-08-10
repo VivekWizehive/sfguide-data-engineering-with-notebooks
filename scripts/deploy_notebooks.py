@@ -8,40 +8,24 @@
 from snowflake.snowpark import Session
 
 
-def main(session: Session, database_name: str, schema_name: str, notebook_project_name: str, local_folder_path: str) -> str:
-    """
-    Deploy a notebook project to Snowflake.
+def main(session, database_name, schema_name, notebook_project_name, local_folder_path):
+    # stable named stage instead of the random session temp stage
+    deploy_stage = f"@{database_name}.{schema_name}.NB_DEPLOY_STAGE"
+    session.sql(f"CREATE STAGE IF NOT EXISTS {database_name}.{schema_name}.NB_DEPLOY_STAGE").collect()
+    # session.sql(f"REMOVE {deploy_stage}").collect()
 
-    1. Gets a temporary stage from the session
-    2. Uploads all files from the local folder to the stage
-    3. Creates or updates the notebook project from the staged files
-    """
-    # Step 1: Get a temporary stage from the session
-    session_stage = session.get_session_stage()
-    print(f"Using session stage: {session_stage}")
-
-    # Step 2: Upload all files from the local folder to the stage
     print(f"Uploading files from: {local_folder_path}")
-    session.file.put(f"file://{local_folder_path}/*", session_stage, auto_compress=False, overwrite=True)
+    session.file.put(f"file://{local_folder_path}/*", deploy_stage, auto_compress=False, overwrite=True)
 
-    # Step 3: Check if the notebook project already exists
-    print(f"Checking if notebook project exists: {notebook_project_name}")
     result = session.sql(f"SHOW NOTEBOOK PROJECTS IN {database_name}.{schema_name}").collect()
-
     project_exists = any(row["name"] == notebook_project_name for row in result)
 
-    # Step 4: Create or alter the notebook project
-    full_project_name = f"{database_name}.{schema_name}.{notebook_project_name}"
-    stage_path = session_stage
-
+    full = f"{database_name}.{schema_name}.{notebook_project_name}"
     if project_exists:
-        print(f"Notebook project exists, adding new version...")
-        session.sql(f"ALTER NOTEBOOK PROJECT {full_project_name} ADD VERSION FROM '{stage_path}'").collect()
+        session.sql(f"ALTER NOTEBOOK PROJECT {full} ADD VERSION FROM '{deploy_stage}'").collect()
     else:
-        print(f"Creating new notebook project...")
-        session.sql(f"CREATE NOTEBOOK PROJECT {full_project_name} FROM '{stage_path}'").collect()
-
-    return f"Notebook project {full_project_name} deployed successfully"
+        session.sql(f"CREATE NOTEBOOK PROJECT {full} FROM '{deploy_stage}'").collect()
+    return f"{full} deployed"
 
 
 # For local debugging
