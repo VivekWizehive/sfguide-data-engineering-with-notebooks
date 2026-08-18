@@ -1,78 +1,142 @@
-#------------------------------------------------------------------------------
-# Hands-On Lab: Intro to Data Engineering with Notebooks
-# Script:       deploy_task_dag.py
-# Author:       Jeremiah Hansen
-# Last Updated: 6/16/2026
-#------------------------------------------------------------------------------
+# #------------------------------------------------------------------------------
+# # Hands-On Lab: Intro to Data Engineering with Notebooks
+# # Script:       deploy_task_dag.py
+# # Author:       Jeremiah Hansen
+# # Last Updated: 6/16/2026
+# #------------------------------------------------------------------------------
 
+# from snowflake.snowpark import Session
+# from snowflake.core import Root
+# from snowflake.core.task.dagv1 import DAGOperation, DAG, DAGTask
+# from datetime import timedelta
+
+
+# # Create the tasks using the DAG API
+# def main(session: Session, database_name: str, schema_name: str, notebook_project_name: str) -> str:
+#     # Set the environment context
+# #    session.use_schema(f"{database_name}.{schema_name}")
+
+#     warehouse_name = "DEMO_WH"
+#     dag_name = "DEMO_DAG"
+#     compute_pool = "SYSTEM_COMPUTE_POOL_CPU"
+#     runtime = "V2.5-CPU-PY3.12"
+#     artifact_repository = "SNOWFLAKE.SNOWPARK.PYPI_SHARED_REPOSITORY"
+
+#     api_root = Root(session)
+#     schema = api_root.databases[database_name].schemas[schema_name]
+#     dag_op = DAGOperation(schema)
+
+#     print(f"Defining DAG: {dag_name}")
+#     print(f"  Notebook project: {database_name}.{schema_name}.{notebook_project_name}")
+#     print(f"  Compute pool: {compute_pool}")
+#     print(f"  Runtime: {runtime}")
+
+#     # Define the DAG
+#     with DAG(dag_name, schedule=timedelta(days=1), warehouse=warehouse_name) as dag:
+#         dag_task0 = DAGTask("DEPLOY_CUSTOM_MODEL", definition=f'''
+#             EXECUTE NOTEBOOK PROJECT {database_name}.{schema_name}.{notebook_project_name}
+#                 MAIN_FILE = 'sweep.ipynb'
+#                 COMPUTE_POOL = {compute_pool}
+#                 RUNTIME = '{runtime}'
+#                 QUERY_WAREHOUSE = {warehouse_name}
+#                 ARTIFACT_REPOSITORIES = ({artifact_repository})
+#                 EXTERNAL_ACCESS_INTEGRATIONS = (THOUGHTSPOT_ACCESS_INT);
+#                 ARGUMENTS = '--database-name {database_name} --schema-name {schema_name}'
+#             ''', warehouse=warehouse_name)
+#          dag_task1 = DAGTask("LOAD_EXCEL_FILES_TASK", definition=f'''
+#             EXECUTE NOTEBOOK PROJECT {database_name}.{schema_name}.{notebook_project_name}
+#                 MAIN_FILE = '01_load_excel_files.ipynb'
+#                 COMPUTE_POOL = {compute_pool}
+#                 RUNTIME = '{runtime}'
+#                 QUERY_WAREHOUSE = {warehouse_name}
+#                 ARTIFACT_REPOSITORIES = ({artifact_repository})
+#                 ARGUMENTS = '--database-name {database_name} --schema-name {schema_name}'
+#             ''', warehouse=warehouse_name)
+#         dag_task2 = DAGTask("LOAD_DAILY_CITY_METRICS", definition=f'''
+#             EXECUTE NOTEBOOK PROJECT {database_name}.{schema_name}.{notebook_project_name}
+#                 MAIN_FILE = '02_load_daily_city_metrics.ipynb'
+#                 COMPUTE_POOL = {compute_pool}
+#                 RUNTIME = '{runtime}'
+#                 QUERY_WAREHOUSE = {warehouse_name}
+#                 ARGUMENTS = '--database-name {database_name} --schema-name {schema_name}'
+#             ''', warehouse=warehouse_name)
+
+#         # Define the dependencies between the tasks
+#         dag_task1 >> dag_task2 # dag_task1 is a predecessor of dag_task2
+
+#     print(f"  Task 1: LOAD_EXCEL_FILES_TASK -> 01_load_excel_files.ipynb")
+#     print(f"  Task 2: LOAD_DAILY_CITY_METRICS -> 02_load_daily_city_metrics.ipynb")
+
+#     # Create the DAG in Snowflake
+#     print(f"Deploying DAG to {database_name}.{schema_name}...")
+#     dag_op.deploy(dag, mode="orreplace")
+
+#     return f"DAG {dag_name} deployed successfully"
+
+
+# # For local debugging
+# if __name__ == "__main__":
+#     import sys
+#     from session_utils import get_snowpark_session
+
+#     # Get a Snowpark session (works in notebook, local, and CI/CD)
+#     # Note: Session is intentionally never closed to avoid issues in notebooks
+#     session = get_snowpark_session()
+
+#     if len(sys.argv) > 3:
+#         print(main(session, sys.argv[1], sys.argv[2], sys.argv[3]))
+#     else:
+#         print("Usage: python deploy_task_dag.py <database> <schema> <notebook_project>")
+#------------------------------------------------------------------------------
+# Deploy a single-task DAG that runs sweep.ipynb with external access
+#------------------------------------------------------------------------------
 from snowflake.snowpark import Session
 from snowflake.core import Root
 from snowflake.core.task.dagv1 import DAGOperation, DAG, DAGTask
 from datetime import timedelta
 
 
-# Create the tasks using the DAG API
 def main(session: Session, database_name: str, schema_name: str, notebook_project_name: str) -> str:
-    # Set the environment context
-#    session.use_schema(f"{database_name}.{schema_name}")
-
-    warehouse_name = "DEMO_WH"
-    dag_name = "DEMO_DAG"
-    compute_pool = "SYSTEM_COMPUTE_POOL_CPU"
-    runtime = "V2.5-CPU-PY3.12"
+    warehouse_name      = "DEMO_WH"
+    dag_name            = "SWEEP_DAG"
+    compute_pool        = "SYSTEM_COMPUTE_POOL_CPU"
+    runtime             = "V2.5-CPU-PY3.12"
     artifact_repository = "SNOWFLAKE.SNOWPARK.PYPI_SHARED_REPOSITORY"
+    eai                 = "THOUGHTSPOT_ACCESS_INT"
+    secret              = f"{database_name}.{schema_name}.TS_CREDS"   # adjust to your secret
 
     api_root = Root(session)
-    schema = api_root.databases[database_name].schemas[schema_name]
-    dag_op = DAGOperation(schema)
+    schema   = api_root.databases[database_name].schemas[schema_name]
+    dag_op   = DAGOperation(schema)
 
     print(f"Defining DAG: {dag_name}")
     print(f"  Notebook project: {database_name}.{schema_name}.{notebook_project_name}")
-    print(f"  Compute pool: {compute_pool}")
-    print(f"  Runtime: {runtime}")
 
-    # Define the DAG
     with DAG(dag_name, schedule=timedelta(days=1), warehouse=warehouse_name) as dag:
-        dag_task1 = DAGTask("LOAD_EXCEL_FILES_TASK", definition=f'''
-            EXECUTE NOTEBOOK PROJECT {database_name}.{schema_name}.{notebook_project_name}
-                MAIN_FILE = '01_load_excel_files.ipynb'
-                COMPUTE_POOL = {compute_pool}
-                RUNTIME = '{runtime}'
-                QUERY_WAREHOUSE = {warehouse_name}
-                ARTIFACT_REPOSITORIES = ({artifact_repository})
-                ARGUMENTS = '--database-name {database_name} --schema-name {schema_name}'
-            ''', warehouse=warehouse_name)
-        dag_task2 = DAGTask("LOAD_DAILY_CITY_METRICS", definition=f'''
-            EXECUTE NOTEBOOK PROJECT {database_name}.{schema_name}.{notebook_project_name}
-                MAIN_FILE = '02_load_daily_city_metrics.ipynb'
-                COMPUTE_POOL = {compute_pool}
-                RUNTIME = '{runtime}'
-                QUERY_WAREHOUSE = {warehouse_name}
-                ARGUMENTS = '--database-name {database_name} --schema-name {schema_name}'
-            ''', warehouse=warehouse_name)
+        DAGTask(
+            "RUN_SWEEP",
+            definition=f'''
+                EXECUTE NOTEBOOK PROJECT {database_name}.{schema_name}.{notebook_project_name}
+                    MAIN_FILE = 'sweep.ipynb'
+                    COMPUTE_POOL = {compute_pool}
+                    RUNTIME = '{runtime}'
+                    QUERY_WAREHOUSE = {warehouse_name}
+                    ARTIFACT_REPOSITORIES = ({artifact_repository})
+                    EXTERNAL_ACCESS_INTEGRATIONS = ({eai})
+                    SECRETS = ({secret})
+            ''',
+            warehouse=warehouse_name,
+        )
 
-        # Define the dependencies between the tasks
-        dag_task1 >> dag_task2 # dag_task1 is a predecessor of dag_task2
-
-    print(f"  Task 1: LOAD_EXCEL_FILES_TASK -> 01_load_excel_files.ipynb")
-    print(f"  Task 2: LOAD_DAILY_CITY_METRICS -> 02_load_daily_city_metrics.ipynb")
-
-    # Create the DAG in Snowflake
     print(f"Deploying DAG to {database_name}.{schema_name}...")
     dag_op.deploy(dag, mode="orreplace")
-
     return f"DAG {dag_name} deployed successfully"
 
 
-# For local debugging
 if __name__ == "__main__":
     import sys
     from session_utils import get_snowpark_session
-
-    # Get a Snowpark session (works in notebook, local, and CI/CD)
-    # Note: Session is intentionally never closed to avoid issues in notebooks
     session = get_snowpark_session()
-
     if len(sys.argv) > 3:
         print(main(session, sys.argv[1], sys.argv[2], sys.argv[3]))
     else:

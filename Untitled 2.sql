@@ -1,0 +1,8 @@
+EXECUTE NOTEBOOK PROJECT DEMO_DB.PROD_SCHEMA.DEMO_PIPELINES_NP
+                MAIN_FILE = '01_load_excel_files.ipynb'
+                COMPUTE_POOL = SYSTEM_COMPUTE_POOL_CPU
+                RUNTIME = 'V2.5-CPU-PY3.12'
+                QUERY_WAREHOUSE = DEMO_WH
+                ARGUMENTS = '--database-name DEMO_DB --schema-name PROD_SCHEMA'
+
+SELECT * FROM DATAMART_NEXT.NEXTZEN.REQUEST_FORM_FIELDS
